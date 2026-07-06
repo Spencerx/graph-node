@@ -80,7 +80,7 @@ wasmparser = "0.118.1"
 thiserror = { workspace = true }
 parking_lot = "0.12.5"
 portable-atomic = { version = "1.13", features = ["fallback"] }
-itertools = "0.14.0"
+itertools = "0.15.0"
 defer = "0.2"
 
 serde_plain = "1.0.2"

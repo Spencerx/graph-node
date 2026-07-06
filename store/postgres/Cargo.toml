@@ -32,7 +32,7 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 anyhow = "1.0.102"
 git-testament = { workspace = true }
-itertools = "0.14.0"
+itertools = "0.15.0"
 hex = "0.4.3"
 pretty_assertions = "1.4.1"
 sqlparser = { workspace = true }

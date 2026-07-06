@@ -20,7 +20,7 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tower = { workspace = true }
 
-itertools = "0.14.0"
+itertools = "0.15.0"
 
 graph-runtime-wasm = { path = "../../runtime/wasm" }
 graph-runtime-derive = { path = "../../runtime/derive" }
