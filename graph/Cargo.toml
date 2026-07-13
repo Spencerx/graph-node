@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 alloy = { workspace = true }
-base64 = "=0.21.7"
+base64 = "=0.22.1"
 anyhow = "1.0"
 async-trait = { workspace = true }
 async-stream = "0.3"
