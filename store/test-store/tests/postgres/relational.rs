@@ -632,6 +632,83 @@ async fn insert_null_fulltext_fields() {
     .await;
 }
 
+/// Copying a table must also populate its fulltext (tsvector) search
+/// columns. These columns are not returned by `Table::column`, so a naive
+/// copy would silently drop them and leave the destination's search index
+/// empty. This copies the `User` table into a fresh schema and checks that a
+/// fulltext query against the copy still returns the expected entity.
+#[graph::test]
+async fn copy_populates_fulltext() {
+    use diesel_async::RunQueryDsl;
+    use graph_store_postgres::layout_for_tests::CopyEntityBatchQuery;
+
+    run_test(async |conn, layout| {
+        // Populate the source `User` table with searchable text
+        insert_users(conn, layout).await;
+
+        // Create a destination schema with the same layout in a separate
+        // namespace to copy into. Drop it first in case a previous run left
+        // it behind, since `remove_schema` only cleans up the source
+        // namespace.
+        let dst_namespace = Namespace::new("sgd0816".to_string()).unwrap();
+        conn.batch_execute(&format!(
+            "drop schema if exists {ns} cascade; create schema {ns}",
+            ns = dst_namespace.as_str()
+        ))
+        .await
+        .unwrap();
+        let dst_site = make_dummy_site(
+            THINGS_SUBGRAPH_ID.clone(),
+            dst_namespace,
+            NETWORK_NAME.to_string(),
+        );
+        let dst_layout = Layout::create_relational_schema(
+            conn,
+            Arc::new(dst_site),
+            &THINGS_SCHEMA,
+            BTreeSet::new(),
+        )
+        .await
+        .expect("Failed to create destination relational schema");
+
+        // Copy the `User` table from the source into the destination
+        let src_table = layout.table_for_entity(&USER_TYPE).unwrap();
+        let dst_table = dst_layout.table_for_entity(&USER_TYPE).unwrap();
+        CopyEntityBatchQuery::new(
+            dst_table.as_ref(),
+            src_table.as_ref(),
+            0,
+            i64::MAX,
+            BLOCK_NUMBER_MAX,
+        )
+        .unwrap()
+        .count_current()
+        .get_result::<i64>(conn)
+        .await
+        .expect("Failed to copy User table");
+
+        // A fulltext query against the copy must find the matching user,
+        // which is only possible if the tsvector column was copied.
+        let mut query =
+            user_query().filter(EntityFilter::Fulltext("userSearch".into(), "Shaq:*".into()));
+        query.block = BLOCK_NUMBER_MAX;
+        let entities = dst_layout
+            .query::<Entity>(&LOGGER, conn, query)
+            .await
+            .expect("fulltext query on copy failed")
+            .0;
+        let ids: Vec<_> = entities
+            .iter()
+            .map(|entity| match entity.get("id") {
+                Some(Value::String(id)) => id.clone(),
+                _ => panic!("entity without string id"),
+            })
+            .collect();
+        assert_eq!(ids, vec!["3".to_string()]);
+    })
+    .await;
+}
+
 #[graph::test]
 async fn update() {
     run_test(async |conn, layout| {

@@ -5104,7 +5104,13 @@ impl<'a> CopyEntityBatchQuery<'a> {
     ) -> Result<Self, StoreError> {
         let mut columns = Vec::new();
         for dcol in &dst.columns {
-            if let Some(scol) = src.column(&dcol.name) {
+            // Match against all source columns, INCLUDING fulltext (tsvector)
+            // columns, which `Table::column` deliberately hides. The stored
+            // tsvector is copied verbatim; without this, fulltext columns
+            // would be silently dropped from the copy (they are nullable, so
+            // the error branch below is not taken) and the destination's
+            // search index would be left empty.
+            if let Some(scol) = src.column_including_fulltext(&dcol.name) {
                 if let Some(msg) = dcol.is_assignable_from(scol, &src.object) {
                     return Err(anyhow!("{}", msg).into());
                 } else {

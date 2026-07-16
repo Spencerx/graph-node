@@ -50,6 +50,7 @@ pub mod layout_for_tests {
         Connection, EVENT_TAP, EVENT_TAP_ENABLED, Mirror, Namespace, make_dummy_site,
     };
     pub use crate::relational::*;
+    pub use crate::relational_queries::CopyEntityBatchQuery;
     pub mod writable {
         pub use crate::writable::test_support::allow_steps;
     }

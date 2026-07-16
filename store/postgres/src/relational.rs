@@ -1752,12 +1752,24 @@ impl Table {
     }
 
     /// Find the column `name` in this table. The name must be in snake case,
-    /// i.e., use SQL conventions
+    /// i.e., use SQL conventions.
+    ///
+    /// Fulltext search columns (`ColumnType::TSVector`) are deliberately
+    /// skipped since they are not queryable entity attributes. Use
+    /// [`Table::column_including_fulltext`] when the fulltext columns are
+    /// needed, e.g. when copying a table.
     pub fn column(&self, name: &SqlName) -> Option<&Column> {
         self.columns
             .iter()
             .filter(|column| !matches!(column.column_type, ColumnType::TSVector(_)))
             .find(|column| &column.name == name)
+    }
+
+    /// Find the column `name` in this table, including fulltext search
+    /// columns which [`Table::column`] hides. The name must be in snake
+    /// case, i.e., use SQL conventions.
+    pub fn column_including_fulltext(&self, name: &SqlName) -> Option<&Column> {
+        self.columns.iter().find(|column| &column.name == name)
     }
 
     /// Find the column for `field` in this table. The name must be the
