@@ -1,7 +1,7 @@
 extern crate clap;
 extern crate graph_store_postgres;
 
-use clap::{Command, arg};
+use clap::{Parser, ValueEnum};
 use graph::schema::InputSchema;
 use std::collections::BTreeSet;
 use std::process::exit;
@@ -13,10 +13,32 @@ use graph_store_postgres::{
     layout_for_tests::make_dummy_site,
 };
 
-pub fn usage(msg: &str) -> ! {
-    println!("layout: {}", msg);
-    println!("Try 'layout --help' for more information.");
-    std::process::exit(1);
+/// The kind of SQL to generate from a GraphQL schema.
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+enum Kind {
+    /// Generate the DDL to create the tables (the default).
+    #[default]
+    Ddl,
+    /// Generate `delete` statements for all tables.
+    Delete,
+    /// Generate `drop table` statements for all tables.
+    Drop,
+    /// Generate Diesel `table!` definitions and Rust structs.
+    Diesel,
+}
+
+/// Information about the database schema for a GraphQL schema
+#[derive(Parser, Debug)]
+#[command(name = "layout")]
+struct Opts {
+    /// What kind of SQL to generate.
+    #[arg(short, long, value_enum, default_value_t = Kind::Ddl)]
+    generate: Kind,
+    /// Path to the GraphQL schema file.
+    schema: String,
+    /// The database schema (namespace) to use.
+    #[arg(default_value = "subgraphs")]
+    db_schema: String,
 }
 
 pub fn ensure<T, E: std::fmt::Display>(res: Result<T, E>, msg: &str) -> T {
@@ -127,28 +149,15 @@ fn print_diesel_tables(layout: &Layout) {
 }
 
 pub fn main() {
-    let args = Command::new("layout")
-    .version("1.0")
-    .about("Information about the database schema for a GraphQL schema")
-    .arg(arg!(-g --generate <KIND> "what kind of SQL to generate. Can be ddl (the default), migrate, delete, or drop"))
-    .arg(arg!(<schema>))
-    .arg(arg!(<db_schema>))
-    .get_matches();
-
-    let schema = args.get_one::<&str>("schema").unwrap();
-    let namespace = args.get_one::<&str>("db_schema").unwrap_or(&"subgraphs");
-    let kind = args.get_one::<&str>("generate").unwrap_or(&"ddl");
+    let opts = Opts::parse();
 
     let subgraph = DeploymentHash::new("Qmasubgraph").unwrap();
-    let schema = ensure(fs::read_to_string(schema), "Can not read schema file");
+    let schema = ensure(fs::read_to_string(&opts.schema), "Can not read schema file");
     let schema = ensure(
         InputSchema::parse_latest(&schema, subgraph.clone()),
         "Failed to parse schema",
     );
-    let namespace = ensure(
-        Namespace::new(namespace.to_string()),
-        "Invalid database schema",
-    );
+    let namespace = ensure(Namespace::new(opts.db_schema), "Invalid database schema");
     let site = Arc::new(make_dummy_site(subgraph, namespace, "anet".to_string()));
     let catalog = ensure(
         Catalog::for_tests(site.clone(), BTreeSet::new()),
@@ -158,13 +167,10 @@ pub fn main() {
         Layout::new(site, &schema, catalog),
         "Failed to construct Mapping",
     );
-    match *kind {
-        "drop" => print_drop(&layout),
-        "delete" => print_delete_all(&layout),
-        "ddl" => print_ddl(&layout),
-        "diesel" => print_diesel_tables(&layout),
-        _ => {
-            usage(&format!("illegal value {} for --generate", kind));
-        }
+    match opts.generate {
+        Kind::Drop => print_drop(&layout),
+        Kind::Delete => print_delete_all(&layout),
+        Kind::Ddl => print_ddl(&layout),
+        Kind::Diesel => print_diesel_tables(&layout),
     }
 }
